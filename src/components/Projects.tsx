@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, Eye, Github, ExternalLink } from 'lucide-react';
+import { Heart, Eye, Github, ExternalLink, Plus, Edit, Trash2 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { useAuth } from '../contexts/AuthContext';
+import ProjectEditor from './ProjectEditor';
 
 interface Project {
   id: string;
@@ -19,6 +20,8 @@ export default function Projects() {
   const { t } = useLanguage();
   const { user, addActivity } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [showEditor, setShowEditor] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
 
   useEffect(() => {
     // Load projects from localStorage or set default
@@ -120,16 +123,82 @@ export default function Projects() {
     localStorage.setItem('projects', JSON.stringify(updatedProjects));
   };
 
+  const handleSaveProject = (projectData: Omit<Project, 'id' | 'likes' | 'views'>) => {
+    if (!user?.isOwner) return;
+
+    if (editingProject) {
+      // Update existing project
+      const updatedProjects = projects.map(p => 
+        p.id === editingProject.id 
+          ? { ...p, ...projectData }
+          : p
+      );
+      setProjects(updatedProjects);
+      localStorage.setItem('projects', JSON.stringify(updatedProjects));
+      addActivity(`Updated project: ${projectData.title}`);
+    } else {
+      // Create new project
+      const newProject: Project = {
+        ...projectData,
+        id: Date.now().toString(),
+        likes: [],
+        views: 0
+      };
+      const updatedProjects = [newProject, ...projects];
+      setProjects(updatedProjects);
+      localStorage.setItem('projects', JSON.stringify(updatedProjects));
+      addActivity(`Created new project: ${projectData.title}`);
+    }
+
+    setShowEditor(false);
+    setEditingProject(null);
+  };
+
+  const handleDeleteProject = (projectId: string) => {
+    if (!user?.isOwner) return;
+
+    const project = projects.find(p => p.id === projectId);
+    const updatedProjects = projects.filter(p => p.id !== projectId);
+    setProjects(updatedProjects);
+    localStorage.setItem('projects', JSON.stringify(updatedProjects));
+    addActivity(`Deleted project: ${project?.title}`);
+  };
+
+  if (showEditor) {
+    return (
+      <ProjectEditor
+        project={editingProject}
+        onSave={handleSaveProject}
+        onCancel={() => {
+          setShowEditor(false);
+          setEditingProject(null);
+        }}
+      />
+    );
+  }
+
   return (
     <section id="projects" className="py-20 px-4">
       <div className="container mx-auto">
-        <div className="text-center mb-16">
-          <h2 className="text-4xl lg:text-5xl font-bold mb-6 bg-gradient-to-r from-blue-600 to-red-600 bg-clip-text text-transparent">
-            {t('projectsTitle')}
-          </h2>
-          <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
-            {t('projectsDescription')}
-          </p>
+        <div className="flex justify-between items-center mb-16">
+          <div className="text-center flex-1">
+            <h2 className="text-4xl lg:text-5xl font-bold mb-6 bg-gradient-to-r from-blue-600 to-red-600 bg-clip-text text-transparent">
+              {t('projectsTitle')}
+            </h2>
+            <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
+              {t('projectsDescription')}
+            </p>
+          </div>
+
+          {user?.isOwner && (
+            <button
+              onClick={() => setShowEditor(true)}
+              className="bg-gradient-to-r from-blue-600 to-red-600 text-white px-6 py-3 rounded-full hover:from-blue-700 hover:to-red-700 transition-all transform hover:scale-105 flex items-center space-x-2 shadow-lg"
+            >
+              <Plus className="w-5 h-5" />
+              <span>Add Project</span>
+            </button>
+          )}
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -153,7 +222,30 @@ export default function Projects() {
                     >
                       <Eye className="w-5 h-5" />
                     </button>
-                    <div className="flex space-x-2">
+                    <div className="flex space-x-2 items-center">
+                      {user?.isOwner && (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingProject(project);
+                              setShowEditor(true);
+                            }}
+                            className="bg-white/20 backdrop-blur-sm text-white p-2 rounded-full hover:bg-white/30 transition-colors"
+                          >
+                            <Edit className="w-5 h-5" />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteProject(project.id);
+                            }}
+                            className="bg-white/20 backdrop-blur-sm text-white p-2 rounded-full hover:bg-white/30 transition-colors"
+                          >
+                            <Trash2 className="w-5 h-5" />
+                          </button>
+                        </>
+                      )}
                       {project.githubUrl && (
                         <a
                           href={project.githubUrl}

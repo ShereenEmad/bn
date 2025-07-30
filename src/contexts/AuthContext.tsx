@@ -4,12 +4,15 @@ interface User {
   id: string;
   name: string;
   email: string;
+  password?: string;
   age?: number;
   work?: string;
   isOwner: boolean;
   loginCount: number;
   activities: string[];
   createdAt: Date;
+  lastLogin: Date;
+  isActive: boolean;
 }
 
 interface AuthContextType {
@@ -20,6 +23,10 @@ interface AuthContextType {
   updateProfile: (updates: Partial<User>) => void;
   addActivity: (activity: string) => void;
   incrementLoginCount: () => void;
+  getAllUsers: () => User[];
+  makeUserOwner: (userId: string) => void;
+  deleteUser: (userId: string) => void;
+  getUserActivities: (userId: string) => string[];
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,37 +35,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
+    // Initialize owner account if it doesn't exist
+    initializeOwnerAccount();
+    
+    // Check for existing session
     const storedUser = localStorage.getItem('currentUser');
     if (storedUser) {
       const userData = JSON.parse(storedUser);
+      // Update last login and set as active
+      userData.lastLogin = new Date();
+      userData.isActive = true;
       setUser(userData);
+      localStorage.setItem('currentUser', JSON.stringify(userData));
+      
+      // Update in users array
+      const users = JSON.parse(localStorage.getItem('users') || '[]');
+      const updatedUsers = users.map((u: any) => 
+        u.id === userData.id ? { ...u, lastLogin: new Date(), isActive: true } : u
+      );
+      localStorage.setItem('users', JSON.stringify(updatedUsers));
     }
   }, []);
+
+  const initializeOwnerAccount = () => {
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+    const ownerExists = users.find((u: any) => u.email === 'mohamedemad.front@gmail.com');
+    
+    if (!ownerExists) {
+      const ownerAccount = {
+        id: 'owner-' + Date.now(),
+        name: 'Mohamed Emad',
+        email: 'mohamedemad.front@gmail.com',
+        password: 'Mes@2010225',
+        isOwner: true,
+        loginCount: 0,
+        activities: [`Owner account created at ${new Date().toLocaleString()}`],
+        createdAt: new Date(),
+        lastLogin: new Date(),
+        isActive: false
+      };
+      
+      users.push(ownerAccount);
+      localStorage.setItem('users', JSON.stringify(users));
+    }
+  };
 
   const login = async (email: string, password: string): Promise<boolean> => {
     try {
       const users = JSON.parse(localStorage.getItem('users') || '[]');
-      const user = users.find((u: any) => u.email === email && u.password === password);
+      const foundUser = users.find((u: any) => u.email === email && u.password === password);
       
-      if (user) {
-        // Check if user is already logged in with different account
-        const currentUser = localStorage.getItem('currentUser');
-        if (currentUser) {
-          const current = JSON.parse(currentUser);
-          if (current.email !== email) {
-            return false; // Can't login with different account
-          }
-        }
-
-        const userData = { ...user };
+      if (foundUser) {
+        const userData = { ...foundUser };
         delete userData.password;
         userData.loginCount = (userData.loginCount || 0) + 1;
         userData.activities = userData.activities || [];
         userData.activities.unshift(`Logged in at ${new Date().toLocaleString()}`);
+        userData.lastLogin = new Date();
+        userData.isActive = true;
         
         // Update user in storage
         const updatedUsers = users.map((u: any) => 
-          u.email === email ? { ...u, loginCount: userData.loginCount, activities: userData.activities } : u
+          u.email === email ? { 
+            ...u, 
+            loginCount: userData.loginCount, 
+            activities: userData.activities,
+            lastLogin: userData.lastLogin,
+            isActive: true
+          } : u
         );
         localStorage.setItem('users', JSON.stringify(updatedUsers));
         localStorage.setItem('currentUser', JSON.stringify(userData));
@@ -82,27 +126,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return false;
       }
 
-      // Check if this is the owner account
-      const isOwner = email === 'mohamedemad.front@gmail.com';
-
       const newUser = {
         id: Date.now().toString(),
         name,
         email,
         password,
-        isOwner,
+        isOwner: false,
         loginCount: 1,
         activities: [`Account created at ${new Date().toLocaleString()}`],
-        createdAt: new Date()
+        createdAt: new Date(),
+        lastLogin: new Date(),
+        isActive: true
       };
 
       users.push(newUser);
       localStorage.setItem('users', JSON.stringify(users));
-
-      // Send email notification (simulated)
-      if (!isOwner) {
-        console.log(`Email sent to mohamedemad.front@gmail.com: New user ${name} (${email}) signed up!`);
-      }
 
       const userData = { ...newUser };
       delete userData.password;
@@ -117,6 +155,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = () => {
+    if (user) {
+      // Mark user as inactive
+      const users = JSON.parse(localStorage.getItem('users') || '[]');
+      const updatedUsers = users.map((u: any) => 
+        u.id === user.id ? { ...u, isActive: false } : u
+      );
+      localStorage.setItem('users', JSON.stringify(updatedUsers));
+    }
+    
     localStorage.removeItem('currentUser');
     setUser(null);
   };
@@ -140,7 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return;
 
     const newActivity = `${activity} at ${new Date().toLocaleString()}`;
-    const updatedActivities = [newActivity, ...(user.activities || [])].slice(0, 10);
+    const updatedActivities = [newActivity, ...(user.activities || [])].slice(0, 20);
     
     updateProfile({ activities: updatedActivities });
   };
@@ -148,6 +195,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const incrementLoginCount = () => {
     if (!user) return;
     updateProfile({ loginCount: user.loginCount + 1 });
+  };
+
+  const getAllUsers = (): User[] => {
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+    return users.map((u: any) => {
+      const { password, ...userWithoutPassword } = u;
+      return userWithoutPassword;
+    });
+  };
+
+  const makeUserOwner = (userId: string) => {
+    if (!user?.isOwner) return;
+
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+    const updatedUsers = users.map((u: any) => 
+      u.id === userId ? { ...u, isOwner: true } : u
+    );
+    localStorage.setItem('users', JSON.stringify(updatedUsers));
+
+    addActivity(`Made user ${users.find((u: any) => u.id === userId)?.name} an owner`);
+  };
+
+  const deleteUser = (userId: string) => {
+    if (!user?.isOwner || userId === user.id) return;
+
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+    const userToDelete = users.find((u: any) => u.id === userId);
+    const updatedUsers = users.filter((u: any) => u.id !== userId);
+    localStorage.setItem('users', JSON.stringify(updatedUsers));
+
+    addActivity(`Deleted user account: ${userToDelete?.name}`);
+  };
+
+  const getUserActivities = (userId: string): string[] => {
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+    const targetUser = users.find((u: any) => u.id === userId);
+    return targetUser?.activities || [];
   };
 
   return (
@@ -158,7 +242,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logout,
       updateProfile,
       addActivity,
-      incrementLoginCount
+      incrementLoginCount,
+      getAllUsers,
+      makeUserOwner,
+      deleteUser,
+      getUserActivities
     }}>
       {children}
     </AuthContext.Provider>

@@ -58,6 +58,15 @@ export default function AuthModal({ onClose }: AuthModalProps) {
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
         <div className="bg-gradient-to-r from-blue-600 to-red-600 p-6 text-white relative">
+          {!isLogin && (
+            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                <strong>Owner Account:</strong> Use <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">mohamedemad.front@gmail.com</code> 
+                with password <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">Mes@2010225</code> for full access.
+              </p>
+            </div>
+          )}
+
           <button
             onClick={onClose}
             className="absolute top-4 right-4 p-2 hover:bg-white/20 rounded-full transition-colors"
@@ -171,14 +180,6 @@ export default function AuthModal({ onClose }: AuthModalProps) {
             </button>
           </div>
 
-          {/* {!isLogin && (
-            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-              <p className="text-sm text-blue-700 dark:text-blue-300">
-                <strong>Note:</strong> Use <code className="bg-blue-100 dark:bg-blue-800 px-1 rounded">mohamedemad.front@gmail.com</code> 
-                as email to get owner privileges (can publish blog posts).
-              </p>
-            </div>
-          )} */}
         </div>
       </div>
     </div>
